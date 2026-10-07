@@ -1,0 +1,7 @@
+{
+  "name": "turn-tides",
+  "version": "0.1.0",
+  "description": "The tides of the session's turns: a bar per turn, hover for its summary, click to jump to it.",
+  "author": { "name": "pengkangzhen" },
+  "types": "./types/index.d.ts"
+}

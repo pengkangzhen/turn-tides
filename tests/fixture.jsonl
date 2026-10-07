@@ -1,0 +1,6 @@
+{"type":"user","uuid":"u-1","timestamp":"2026-10-07T10:00:00Z","message":{"role":"user","content":"first question about supply chain"}}
+{"type":"assistant","uuid":"a-1","message":{"role":"assistant","content":[{"type":"text","text":"an answer"}]}}
+{"type":"user","uuid":"m-1","isMeta":true,"message":{"role":"user","content":"a reminder the engine injected"}}
+{"type":"user","uuid":"c-1","message":{"role":"user","content":"/compact history"}}
+{"type":"user","uuid":"s-1","isSidechain":true,"message":{"role":"user","content":"a subagent's row"}}
+{"type":"user","uuid":"u-2","timestamp":"2026-10-07T11:00:00Z","message":{"role":"user","content":[{"type":"text","text":"second question"},{"type":"tool_result","tool_use_id":"t-1","content":"ignored"}]}}

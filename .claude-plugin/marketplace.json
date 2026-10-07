@@ -1,0 +1,5 @@
+{
+  "name": "turn-tides",
+  "owner": { "name": "pengkangzhen" },
+  "plugins": [{ "name": "turn-tides", "source": "./" }]
+}
