@@ -97,11 +97,47 @@ test('a transcript over the read cap seeds from its tail', async ($, on) => {
   on('classic.SessionStart', () => ({}))
   on('fs.read', () => ({ deny: 'over the 4 MiB cap' }))
   on('process.run', (_$, e) => {
+    if (e.argv[0] === 'wc') {
+      return { value: { exitCode: 0, stdout: `${fixture.length + 40} tests/fixture.jsonl`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     expect(e.argv.join(' ').endsWith('fixture.jsonl')).toBe(true)
     return {
       value: {
         exitCode: 0,
         stdout: 'partial-line-should-be-dropped\n' + fixture,
+        stderr: '',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    }
+  })
+  on('ui.render', () => ({ type: 'Text', children: [''] }))
+
+  await $.classic.SessionStart({ source: 'resume', transcript_path: 'tests/fixture.jsonl' })
+
+  const ui = await $.ui.mount({
+    plugin: 'turn-tides',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    requestId: 'band',
+    props: bandProps,
+  })
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(3)
+  await ui.unmount()
+})
+
+test('a transcript read in chunked windows joins back whole', async ($, on) => {
+  on('classic.SessionStart', () => ({}))
+  on('fs.read', () => ({ deny: 'over the 4 MiB cap' }))
+  on('process.run', (_$, e) => {
+    if (e.argv[0] === 'wc') {
+      return { value: { exitCode: 0, stdout: `${fixture.length + 40} tests/fixture.jsonl`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
+    const start = Number(e.argv[2]!.slice(1))
+    return {
+      value: {
+        exitCode: 0,
+        stdout: fixture.slice(start - 1),
         stderr: '',
         isStdoutTruncated: false,
         isStderrTruncated: false,
