@@ -4,13 +4,7 @@ The tides of your conversation, drawn above the prompt — one bar per turn, hov
 
 A [Claude Code](https://code.claude.com) mod (function-hooks plugin) in the visual language of the official `token-weather`: where that one forecasts the context window, this one charts the session's turns.
 
-```
-                        ┌ hover unfolds the turn's summary ──────────┐
- #3 在 herdr 中能用吗…
- A: 能用，核心链路在 herdr 里成立；…
-≋  12 tides  ▄▄ ▄▄▄▄ ▄▄ ▄▄▄▄▄▄▄ ▄▄▄ ▄▄▄▄  ← one bar per turn, width = answer length
-❯ _
-```
+![A hover unfolding one turn's summary above the strip of turn bars](screenshots/demo.png)
 
 ## Install
 
