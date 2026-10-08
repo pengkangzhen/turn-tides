@@ -119,11 +119,12 @@ const barWidth = (q: Question): number => {
 }
 
 // the strip never wraps and no turn is dropped: when the natural widths
-// overflow the line, every bar scales by its share of the full budget
-// (floored at one column, so the mapping stays monotone — longer answers
-// stay visibly longer until the physics of the terminal runs out) and the
-// bars touch like token-weather's chart. Only a turn count beyond the raw
-// columns degenerates to the newest ones.
+// overflow the line, the one-column gaps are reserved first and every bar
+// scales by its share of what remains (floored at one column, so the mapping
+// stays monotone — longer answers stay visibly longer until the physics of
+// the terminal runs out). Only when even one-column bars with gaps cannot
+// fit do the gaps give way and the bars touch, token-weather's chart style;
+// a turn count beyond the raw columns degenerates to the newest ones.
 const scaleStrip = (
   list: Question[],
   columns: number,
@@ -132,8 +133,12 @@ const scaleStrip = (
   const bars = list.length > budget ? list.slice(-budget) : list
   const widths = bars.map(barWidth)
   const sum = widths.reduce((a, b) => a + b, 0)
-  const natural = sum + Math.max(0, bars.length - 1)
-  if (natural <= budget) return { bars, widths, gap: 1 }
+  const gaps = bars.length - 1
+  if (sum + gaps <= budget) return { bars, widths, gap: 1 }
+  if (bars.length + gaps <= budget) {
+    const k = (budget - gaps) / sum
+    return { bars, widths: widths.map(w => Math.max(1, Math.floor(w * k))), gap: 1 }
+  }
   const k = budget / sum
   return { bars, widths: widths.map(w => Math.max(1, Math.floor(w * k))), gap: 0 }
 }
