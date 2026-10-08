@@ -29,7 +29,9 @@ const isQuestionText = (text: string): boolean =>
   !text.startsWith('<command-name>') &&
   !text.startsWith('[Request interrupted')
 
-const questionFromRow = (parsed: unknown): { id: string; text: string; at: number } | undefined => {
+const questionFromRow = (
+  parsed: unknown,
+): { id: string; kind: 'ask'; text: string; at: number } | undefined => {
   if (parsed === null || typeof parsed !== 'object') return undefined
   const row = parsed as {
     type?: unknown
@@ -46,7 +48,37 @@ const questionFromRow = (parsed: unknown): { id: string; text: string; at: numbe
   if (!isQuestionText(text)) return undefined
   return {
     id: row.uuid,
+    kind: 'ask' as const,
     text,
+    at: typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : 0,
+  }
+}
+
+// a `!`-passthrough shell command the person ran from the prompt: its row
+// wraps the command line in <bash-input> tags
+const commandFromRow = (
+  parsed: unknown,
+): { id: string; kind: 'command'; text: string; at: number } | undefined => {
+  if (parsed === null || typeof parsed !== 'object') return undefined
+  const row = parsed as {
+    type?: unknown
+    isMeta?: unknown
+    isSidechain?: unknown
+    uuid?: unknown
+    timestamp?: unknown
+    message?: unknown
+  }
+  if (row.type !== 'user' || row.isMeta === true || row.isSidechain === true) return undefined
+  if (typeof row.uuid !== 'string' || row.message === null || typeof row.message !== 'object')
+    return undefined
+  const text = textOf((row.message as { content?: unknown }).content)
+  if (!text.startsWith('<bash-input>')) return undefined
+  const line = /^<bash-input>([\s\S]*?)<\/bash-input>/.exec(text)?.[1]?.trim()
+  if (line === undefined || line === '') return undefined
+  return {
+    id: row.uuid,
+    kind: 'command' as const,
+    text: line,
     at: typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : 0,
   }
 }
@@ -89,7 +121,12 @@ const seed = async ($: EngineInterface, transcriptPath: string): Promise<void> =
       found.push({ ...asked, answer: '' })
       continue
     }
-    if (isAssistantRow(parsed) && found.length > 0) {
+    const command = commandFromRow(parsed)
+    if (command !== undefined) {
+      found.push({ ...command, answer: '' })
+      continue
+    }
+    if (isAssistantRow(parsed) && found.length > 0 && found[found.length - 1]!.kind === 'ask') {
       const message = (parsed as { message?: unknown }).message
       const text =
         message !== null && typeof message === 'object'
@@ -106,15 +143,15 @@ const oneLine = (text: string, room: number): string => {
   return flat.length > room ? flat.slice(0, Math.max(1, room - 1)) + '…' : flat
 }
 
-// a turn's bar width, token-weather's history chart turned horizontal: the
-// longer the answer, the longer the bar; the running turn sits at a middle
-// width until its answer lands
+// a turn's bar width, token-weather's history chart turned horizontal: an
+// ask reads the volume of its question and answer together (the longer the
+// exchange, the longer the bar); a !-command is a single column of its own
 const barWidth = (q: Question): number => {
-  const len = q.answer.length
-  if (len === 0) return 3
-  if (len <= 40) return 2
-  if (len <= 120) return 3
-  if (len <= 240) return 4
+  if (q.kind === 'command') return 1
+  const len = q.text.length + q.answer.length
+  if (len <= 80) return 2
+  if (len <= 200) return 3
+  if (len <= 400) return 4
   return 5
 }
 
@@ -163,32 +200,39 @@ export const register: Register = on => {
   on('session.append', async ($, e, next) => {
     if (
       e.agentId === undefined &&
-      e.door === 'prompt' &&
+      (e.door === 'prompt' || e.door === 'command') &&
       e.message.type === 'user' &&
       e.message.isMeta !== true
     ) {
       const text = textOf(e.message.content)
-      if (isQuestionText(text)) {
+      // a !-passthrough command arrives wrapped in <bash-input>; a slash
+      // command's echo in <command-name> stays out of the strip
+      const kind: Question['kind'] = text.startsWith('<bash-input>') ? 'command' : 'ask'
+      const body =
+        kind === 'command'
+          ? (/^<bash-input>([\s\S]*?)<\/bash-input>/.exec(text)?.[1] ?? '').trim()
+          : text
+      if ((kind === 'ask' && isQuestionText(text)) || (kind === 'command' && body !== '')) {
         const at = await $.clock.now()
         await update($, questions, list =>
           list.some(q => q.id === e.uuid)
             ? list
-            : [...list, { id: e.uuid, text, answer: '', at }],
+            : [...list, { id: e.uuid, kind, text: body, answer: '', at }],
         )
       }
     }
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // the turn's own final text becomes the block's hover summary; only the
-  // last still-unanswered question takes it, so continuations of a turn
-  // that asked nothing change nobody's summary
+  // the turn's own final text becomes the ask's hover summary; only the last
+  // still-unanswered ask takes it, so continuations of a turn that asked
+  // nothing change nobody's summary and !-commands never take one
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined && e.answer !== '') {
       const summary = oneLine(e.answer, ANSWER_CAP)
       await update($, questions, list => {
         const last = list[list.length - 1]
-        if (last === undefined || last.answer !== '') return list
+        if (last === undefined || last.kind !== 'ask' || last.answer !== '') return list
         return [...list.slice(0, -1), { ...last, answer: summary }]
       })
     }
@@ -227,10 +271,14 @@ export const register: Register = on => {
               >
                 <Text color="black">
                   <Text bold>{`#${i + 1}`}</Text>
-                  {` ${oneLine(q.text, room)}`}
+                  {` ${q.kind === 'command' ? '$ ' : ''}${oneLine(q.text, room)}`}
                 </Text>
                 <Text color="black" dimColor>
-                  {q.answer === '' ? 'A: …' : `A: ${oneLine(q.answer, room)}`}
+                  {q.kind === 'command'
+                    ? '! local command'
+                    : q.answer === ''
+                      ? 'A: …'
+                      : `A: ${oneLine(q.answer, room)}`}
                 </Text>
               </Box>
             ))}
@@ -240,7 +288,7 @@ export const register: Register = on => {
               {scaled.bars.map((q, i) => (
                 <Box
                   key={`b:${q.id}`}
-                  backgroundColor="cyan"
+                  backgroundColor={q.kind === 'command' ? 'magenta' : 'cyan'}
                   hover={{ scope: `q:${q.id}` }}
                 >
                   <Button

@@ -20,6 +20,7 @@ const fixture = [
   '{"type":"user","uuid":"s-1","isSidechain":true,"message":{"role":"user","content":"a subagent row"}}',
   '{"type":"user","uuid":"x-1","message":{"role":"user","content":"<command-name>/reload-plugins</command-name>"}}',
   '{"type":"user","uuid":"x-2","message":{"role":"user","content":"[Request interrupted by user]"}}',
+  '{"type":"user","uuid":"cmd-1","timestamp":"2026-10-07T10:30:00Z","message":{"role":"user","content":"<bash-input>git status</bash-input>\\n<bash-stdout>(Bash completed)</bash-stdout>"}}',
   '{"type":"user","uuid":"u-2","timestamp":"2026-10-07T11:00:00Z","message":{"role":"user","content":[{"type":"text","text":"second question"},{"type":"tool_result","tool_use_id":"t-1","content":"ignored"}]}}',
 ].join('\n')
 
@@ -49,9 +50,11 @@ test('seeds questions with answers and draws the band strip', async ($, on) => {
     // one chip per question, addressed by key (the label is blank space on
     // the chip's background)
     const blocks = await ui.findAll({ type: 'Button' })
-    expect(blocks.length, `${surface} draws one block per turn`).toBe(2)
+    expect(blocks.length, `${surface} draws one block per turn`).toBe(3)
     expect(await ui.findAll({ type: 'Button', key: 'q:u-1' })).toHaveLength(1)
     expect(await ui.findAll({ type: 'Button', key: 'q:u-2' })).toHaveLength(1)
+    expect(await ui.findAll({ type: 'Button', key: 'q:cmd-1' })).toHaveLength(1)
+    expect(await ui.findAll({ type: 'Text', text: 'git status' })).not.toHaveLength(0)
 
     // the hover summary carries the question and the answer seeded from
     // the assistant row that follows it
@@ -85,7 +88,7 @@ test('an empty strip re-seeds from the next prompt', async ($, on) => {
     props: bandProps,
   })
   const blocks = await ui.findAll({ type: 'Button' })
-  expect(blocks.length).toBe(2)
+  expect(blocks.length).toBe(3)
   await ui.unmount()
 })
 
@@ -115,6 +118,6 @@ test('a transcript over the read cap seeds from its tail', async ($, on) => {
     requestId: 'band',
     props: bandProps,
   })
-  expect(await ui.findAll({ type: 'Button' })).toHaveLength(2)
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(3)
   await ui.unmount()
 })

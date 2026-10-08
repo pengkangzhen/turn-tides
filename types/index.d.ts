@@ -5,7 +5,14 @@ export type Question = {
    */
   id: string
   /**
-   * The prompt's text blocks joined, as first asked.
+   * 'ask': a question the person typed, with the turn's answer as summary.
+   * 'command': a `!`-passthrough shell command the person ran; one bar,
+   * its own colour, no answer.
+   */
+  kind: 'ask' | 'command'
+  /**
+   * The prompt's text blocks joined, as first asked; for a command, the
+   * command line itself.
    */
   text: string
   /**
