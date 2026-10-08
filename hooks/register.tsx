@@ -149,36 +149,48 @@ const oneLine = (text: string, room: number): string => {
   return flat.length > room ? flat.slice(0, Math.max(1, room - 1)) + '…' : flat
 }
 
-// a turn's bar width, token-weather's history chart turned horizontal: an
-// ask reads the output tokens its turn generated (calibrated on real
-// sessions: p25~1.5k, median~2.2k, p75~6.3k, p90~14k; a running turn sits
-// mid until it lands); a !-command is a single column of its own
-const barWidth = (q: Question): number => {
-  if (q.kind === 'command') return 1
-  if (q.tokens === 0) return 3
-  if (q.tokens <= 600) return 2
-  if (q.tokens <= 2000) return 3
-  if (q.tokens <= 8000) return 4
-  return 5
-}
-
 const shortTokens = (n: number): string =>
   n >= 1000 ? `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : String(n)
+
+// dynamic widths, token-weather's rule ("bars scale to the busiest reading
+// shown, so growth shows at any fill level"): an ask's width spreads 2..5
+// across the logarithm of its output tokens between the quietest and the
+// busiest turns in view, so the strip always shows its full range no matter
+// how the session's absolute numbers cluster, and ties stay ties. The
+// running turn (its tokens not yet in) matches the latest known one; a
+// !-command is a single column of its own
+const rawWidths = (bars: Question[]): number[] => {
+  const known = bars.filter(q => q.kind === 'ask' && q.tokens > 0).map(q => q.tokens)
+  if (known.length === 0) return bars.map(q => (q.kind === 'command' ? 1 : 3))
+  const lo = Math.log(Math.min(...known))
+  const hi = Math.log(Math.max(...known))
+  const spread = hi - lo
+  const widthOf = (t: number): number =>
+    spread === 0 ? 3 : 2 + Math.round((3 * (Math.log(t) - lo)) / spread)
+  let fallback = 3
+  for (let i = bars.length - 1; i >= 0; i -= 1) {
+    if (bars[i]!.kind === 'ask' && bars[i]!.tokens > 0) {
+      fallback = widthOf(bars[i]!.tokens)
+      break
+    }
+  }
+  return bars.map(q => (q.kind === 'command' ? 1 : q.tokens > 0 ? widthOf(q.tokens) : fallback))
+}
 
 // the strip never wraps and no turn is dropped: when the natural widths
 // overflow the line, the one-column gaps are reserved first and every bar
 // scales by its share of what remains (floored at one column, so the mapping
-// stays monotone — longer answers stay visibly longer until the physics of
-// the terminal runs out). Only when even one-column bars with gaps cannot
-// fit do the gaps give way and the bars touch, token-weather's chart style;
-// a turn count beyond the raw columns degenerates to the newest ones.
+// stays monotone — busier turns stay visibly longer until the physics of the
+// terminal runs out). Only when even one-column bars with gaps cannot fit do
+// the gaps give way and the bars touch, token-weather's chart style; a turn
+// count beyond the raw columns degenerates to the newest ones.
 const scaleStrip = (
   list: Question[],
   columns: number,
 ): { bars: Question[]; widths: number[]; gap: number } => {
   const budget = Math.max(24, Math.max(8, columns) - 14)
   const bars = list.length > budget ? list.slice(-budget) : list
-  const widths = bars.map(barWidth)
+  const widths = rawWidths(bars)
   const sum = widths.reduce((a, b) => a + b, 0)
   const gaps = bars.length - 1
   if (sum + gaps <= budget) return { bars, widths, gap: 1 }
