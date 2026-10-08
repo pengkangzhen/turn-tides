@@ -122,21 +122,23 @@ const seed = async ($: EngineInterface, transcriptPath: string): Promise<void> =
     }
     const asked = questionFromRow(parsed)
     if (asked !== undefined) {
-      found.push({ ...asked, answer: '' })
+      found.push({ ...asked, answer: '', tokens: 0 })
       continue
     }
     const command = commandFromRow(parsed)
     if (command !== undefined) {
-      found.push({ ...command, answer: '' })
+      found.push({ ...command, answer: '', tokens: 0 })
       continue
     }
     if (isAssistantRow(parsed) && found.length > 0 && found[found.length - 1]!.kind === 'ask') {
       const message = (parsed as { message?: unknown }).message
-      const text =
-        message !== null && typeof message === 'object'
-          ? oneLine(textOf((message as { content?: unknown }).content), ANSWER_CAP)
-          : ''
-      if (text !== '') found[found.length - 1]!.answer = text
+      if (message !== null && typeof message === 'object') {
+        const typed = message as { content?: unknown; usage?: { output_tokens?: unknown } }
+        const text = oneLine(textOf(typed.content), ANSWER_CAP)
+        if (text !== '') found[found.length - 1]!.answer = text
+        const out = typed.usage?.output_tokens
+        if (typeof out === 'number') found[found.length - 1]!.tokens += out
+      }
     }
   }
   await update($, questions, () => found)
@@ -148,16 +150,20 @@ const oneLine = (text: string, room: number): string => {
 }
 
 // a turn's bar width, token-weather's history chart turned horizontal: an
-// ask reads the volume of its question and answer together (the longer the
-// exchange, the longer the bar); a !-command is a single column of its own
+// ask reads the output tokens its turn generated (calibrated on real
+// sessions: p25~1.5k, median~2.2k, p75~6.3k, p90~14k; a running turn sits
+// mid until it lands); a !-command is a single column of its own
 const barWidth = (q: Question): number => {
   if (q.kind === 'command') return 1
-  const len = q.text.length + q.answer.length
-  if (len <= 80) return 2
-  if (len <= 200) return 3
-  if (len <= 400) return 4
+  if (q.tokens === 0) return 3
+  if (q.tokens <= 600) return 2
+  if (q.tokens <= 2000) return 3
+  if (q.tokens <= 8000) return 4
   return 5
 }
+
+const shortTokens = (n: number): string =>
+  n >= 1000 ? `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : String(n)
 
 // the strip never wraps and no turn is dropped: when the natural widths
 // overflow the line, the one-column gaps are reserved first and every bar
@@ -221,7 +227,7 @@ export const register: Register = on => {
         await update($, questions, list =>
           list.some(q => q.id === e.uuid)
             ? list
-            : [...list, { id: e.uuid, kind, text: body, answer: '', at }],
+            : [...list, { id: e.uuid, kind, text: body, answer: '', tokens: 0, at }],
         )
       }
     }
@@ -237,7 +243,10 @@ export const register: Register = on => {
       await update($, questions, list => {
         const last = list[list.length - 1]
         if (last === undefined || last.kind !== 'ask' || last.answer !== '') return list
-        return [...list.slice(0, -1), { ...last, answer: summary }]
+        return [
+          ...list.slice(0, -1),
+          { ...last, answer: summary, tokens: e.usage?.output_tokens ?? 0 },
+        ]
       })
     }
     return next(e)
@@ -283,6 +292,7 @@ export const register: Register = on => {
                     : q.answer === ''
                       ? 'A: …'
                       : `A: ${oneLine(q.answer, room)}`}
+                  {q.kind === 'ask' && q.tokens > 0 ? `  ↓${shortTokens(q.tokens)}` : ''}
                 </Text>
               </Box>
             ))}

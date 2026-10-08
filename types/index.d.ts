@@ -21,6 +21,12 @@ export type Question = {
    */
   answer: string
   /**
+   * Output tokens the turn generated, summed over its responses — what the
+   * bar's width reads; 0 until the turn ends. Input tokens are left out:
+   * dominated by context re-reads, they grow with the session, not the turn.
+   */
+  tokens: number
+  /**
    * When it was asked, in $.clock.now()'s milliseconds (Date.parse of the
    * transcript's timestamp when seeded from the file).
    */

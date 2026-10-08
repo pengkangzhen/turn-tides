@@ -14,7 +14,7 @@ const bandProps: RenderPropsOf['AbovePrompt'] = {
 // filesystem, so the fs.read stub below serves them as the transcript
 const fixture = [
   '{"type":"user","uuid":"u-1","timestamp":"2026-10-07T10:00:00Z","message":{"role":"user","content":"first question about supply chain"}}',
-  '{"type":"assistant","uuid":"a-1","message":{"role":"assistant","content":[{"type":"text","text":"an answer"}]}}',
+  '{"type":"assistant","uuid":"a-1","message":{"role":"assistant","content":[{"type":"text","text":"an answer"}],"usage":{"output_tokens":900}}}',
   '{"type":"user","uuid":"m-1","isMeta":true,"message":{"role":"user","content":"a reminder the engine injected"}}',
   '{"type":"user","uuid":"c-1","message":{"role":"user","content":"/compact history"}}',
   '{"type":"user","uuid":"s-1","isSidechain":true,"message":{"role":"user","content":"a subagent row"}}',
