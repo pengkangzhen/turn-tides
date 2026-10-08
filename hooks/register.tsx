@@ -118,6 +118,20 @@ const barWidth = (q: Question): number => {
   return 5
 }
 
+// the strip never wraps: fill one line from the newest turn backwards until
+// the width runs out, like token-weather's last-twelve chart — the count in
+// the lead still names every turn there was
+const fitOnOneLine = (list: Question[], columns: number): Question[] => {
+  const budget = Math.max(24, Math.max(8, columns) - 14)
+  let used = 0
+  let start = list.length
+  while (start > 0 && used + barWidth(list[start - 1]!) + 1 <= budget) {
+    start -= 1
+    used += barWidth(list[start]!) + 1
+  }
+  return list.slice(start)
+}
+
 export const register: Register = on => {
   // transcript_path is the one place the session's own file is named; seeding
   // from it recovers the questions asked before this plugin loaded, and on a
@@ -208,10 +222,10 @@ export const register: Register = on => {
                 </Text>
               </Box>
             ))}
-            <Box flexDirection="row" flexWrap="wrap" gap={1} paddingX={1}>
+            <Box flexDirection="row" gap={1} paddingX={1}>
               <Text color="cyan" bold>{`≋  ${list.length}`}</Text>
               <Text dimColor>tides</Text>
-              {list.map(q => (
+              {fitOnOneLine(list, e.props.bodyColumns).map(q => (
                 <Box
                   key={`b:${q.id}`}
                   backgroundColor="cyan"
