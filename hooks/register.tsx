@@ -94,12 +94,12 @@ const isAssistantRow = (parsed: unknown): boolean => {
 }
 
 // the whole file is preferred; a transcript past the 4 MiB read cap falls
-// back to its last MiB through a host tail, whose partial first line the
-// JSON parser drops anyway
+// back to its last 4 MiB — a host command's stdout cap — through a host
+// tail, whose partial first line the JSON parser drops anyway
 const readTranscript = async ($: EngineInterface, path: string): Promise<string | undefined> => {
   const whole = await $.fs.read(path).catch(() => undefined)
   if (whole !== undefined) return whole
-  const tail = await $.process.run(['tail', '-c', '1048576', path]).catch(() => undefined)
+  const tail = await $.process.run(['tail', '-c', '4194304', path]).catch(() => undefined)
   return tail === undefined || tail.exitCode !== 0 ? undefined : tail.stdout
 }
 
@@ -107,7 +107,14 @@ const readTranscript = async ($: EngineInterface, path: string): Promise<string 
 // $.ui.scroll takes, so the seeded file and the live appends join on it.
 // The assistant rows that follow a question become its answer summary: each
 // one overwrites the last, so the row nearest the next question wins.
-const seed = async ($: EngineInterface, transcriptPath: string): Promise<void> => {
+// merge: a tail-windowed re-seed refreshes what the window covers and keeps
+// the turns before it (a wholesale replace would shrink the strip to the
+// window); a session start still replaces wholesale — a /clear must reset
+const seed = async (
+  $: EngineInterface,
+  transcriptPath: string,
+  merge = false,
+): Promise<void> => {
   if (transcriptPath === '') return
   const file = await readTranscript($, transcriptPath)
   if (file === undefined) return
@@ -141,7 +148,12 @@ const seed = async ($: EngineInterface, transcriptPath: string): Promise<void> =
       }
     }
   }
-  await update($, questions, () => found)
+  await update($, questions, list => {
+    if (!merge) return found
+    const byId = new Map(list.map(q => [q.id, q] as const))
+    for (const q of found) byId.set(q.id, q)
+    return [...byId.values()].sort((a, b) => a.at - b.at)
+  })
 }
 
 const oneLine = (text: string, room: number): string => {
@@ -220,9 +232,9 @@ export const register: Register = on => {
   on('classic.UserPromptSubmit', async ($, e, next) => {
     if (!seededThisCopy) {
       seededThisCopy = true
-      await seed($, e.transcript_path)
+      await seed($, e.transcript_path, true)
     } else if ((await read($, questions)).length === 0) {
-      await seed($, e.transcript_path)
+      await seed($, e.transcript_path, true)
     }
     return next(e)
   }).catch(($, e, next) => next(e))
