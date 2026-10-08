@@ -118,18 +118,24 @@ const barWidth = (q: Question): number => {
   return 5
 }
 
-// the strip never wraps: fill one line from the newest turn backwards until
-// the width runs out, like token-weather's last-twelve chart — the count in
-// the lead still names every turn there was
-const fitOnOneLine = (list: Question[], columns: number): Question[] => {
+// the strip never wraps and no turn is dropped: when the natural widths
+// overflow the line, every bar scales by its share of the full budget
+// (floored at one column, so the mapping stays monotone — longer answers
+// stay visibly longer until the physics of the terminal runs out) and the
+// bars touch like token-weather's chart. Only a turn count beyond the raw
+// columns degenerates to the newest ones.
+const scaleStrip = (
+  list: Question[],
+  columns: number,
+): { bars: Question[]; widths: number[]; gap: number } => {
   const budget = Math.max(24, Math.max(8, columns) - 14)
-  let used = 0
-  let start = list.length
-  while (start > 0 && used + barWidth(list[start - 1]!) + 1 <= budget) {
-    start -= 1
-    used += barWidth(list[start]!) + 1
-  }
-  return list.slice(start)
+  const bars = list.length > budget ? list.slice(-budget) : list
+  const widths = bars.map(barWidth)
+  const sum = widths.reduce((a, b) => a + b, 0)
+  const natural = sum + Math.max(0, bars.length - 1)
+  if (natural <= budget) return { bars, widths, gap: 1 }
+  const k = budget / sum
+  return { bars, widths: widths.map(w => Math.max(1, Math.floor(w * k))), gap: 0 }
 }
 
 export const register: Register = on => {
@@ -195,6 +201,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, questions)
     const room = Math.max(4, Math.max(8, e.props.bodyColumns) - 6)
+    const scaled = scaleStrip(list, e.props.bodyColumns)
 
     // compose with the other band mods (token-weather, replay-theater):
     // ours on top, whatever the chain beneath draws kept below it
@@ -222,10 +229,10 @@ export const register: Register = on => {
                 </Text>
               </Box>
             ))}
-            <Box flexDirection="row" gap={1} paddingX={1}>
+            <Box flexDirection="row" gap={scaled.gap} paddingX={1}>
               <Text color="cyan" bold>{`≋  ${list.length}`}</Text>
               <Text dimColor>tides</Text>
-              {fitOnOneLine(list, e.props.bodyColumns).map(q => (
+              {scaled.bars.map((q, i) => (
                 <Box
                   key={`b:${q.id}`}
                   backgroundColor="cyan"
@@ -234,7 +241,7 @@ export const register: Register = on => {
                   <Button
                     key={`q:${q.id}`}
                     plain
-                    label={' '.repeat(barWidth(q))}
+                    label={' '.repeat(scaled.widths[i]!)}
                     onPress={() =>
                       void $.ui.scroll({ to: { requestId: q.id }, block: 'start' }).catch(
                         () => undefined,
