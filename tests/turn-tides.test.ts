@@ -21,6 +21,7 @@ const fixture = [
   '{"type":"user","uuid":"x-1","message":{"role":"user","content":"<command-name>/reload-plugins</command-name>"}}',
   '{"type":"user","uuid":"x-2","message":{"role":"user","content":"[Request interrupted by user]"}}',
   '{"type":"user","uuid":"cmd-1","timestamp":"2026-10-07T10:30:00Z","message":{"role":"user","content":"<bash-input>git status</bash-input>\\n<bash-stdout>(Bash completed)</bash-stdout>"}}',
+  '{"type":"user","uuid":"cmd-2","message":{"role":"user","content":"<bash-stdout>only the output, no input</bash-stdout>"}}',
   '{"type":"user","uuid":"u-2","timestamp":"2026-10-07T11:00:00Z","message":{"role":"user","content":[{"type":"text","text":"second question"},{"type":"tool_result","tool_use_id":"t-1","content":"ignored"}]}}',
 ].join('\n')
 

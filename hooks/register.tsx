@@ -22,12 +22,16 @@ const textOf = (content: unknown): string => {
 }
 
 // not every user-role row is a question the person typed: slash commands,
-// local-command echoes and interruption markers ride the same door
+// local-command echoes (the !-passthrough envelope is <bash-input> for the
+// command line and <bash-stdout> for its output, two separate rows),
+// interruption markers and caveats ride the same door
+const isLocalEcho = (text: string): boolean =>
+  text.startsWith('<command-name>') ||
+  text.startsWith('<bash-') ||
+  text.startsWith('<local-command')
+
 const isQuestionText = (text: string): boolean =>
-  text !== '' &&
-  !text.startsWith('/') &&
-  !text.startsWith('<command-name>') &&
-  !text.startsWith('[Request interrupted')
+  text !== '' && !text.startsWith('/') && !isLocalEcho(text) && !text.startsWith('[Request interrupted')
 
 const questionFromRow = (
   parsed: unknown,
