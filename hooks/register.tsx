@@ -203,6 +203,12 @@ const scaleStrip = (
 }
 
 export const register: Register = on => {
+  // a fresh module copy re-seeds on the first prompt after it loads: an
+  // incremental list built by an older schema (turns recorded before the
+  // tokens field, say) would otherwise keep its stale widths forever; later
+  // prompts only re-seed when the strip stands empty
+  let seededThisCopy = false
+
   // transcript_path is the one place the session's own file is named; seeding
   // from it recovers the questions asked before this plugin loaded, and on a
   // /clear it re-reads the fresh file, replacing the list wholesale.
@@ -211,11 +217,13 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // a plugin loaded mid-session missed the session's start; the first prompt
-  // after that still names the transcript, so an empty strip re-seeds there
   on('classic.UserPromptSubmit', async ($, e, next) => {
-    const current = await read($, questions)
-    if (current.length === 0) await seed($, e.transcript_path)
+    if (!seededThisCopy) {
+      seededThisCopy = true
+      await seed($, e.transcript_path)
+    } else if ((await read($, questions)).length === 0) {
+      await seed($, e.transcript_path)
+    }
     return next(e)
   }).catch(($, e, next) => next(e))
 
